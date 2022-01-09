@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>下载速度</title>
+  <script src="https:cdn.plot.ly/plotly-latest.min.js"></script>
+  <script src="https:cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest"></script>
+  <style>
+    .plots{
+      display: inline-block;
+    }
+  </style>
+</head>
+<body>
+  <p>plot </p>
+  <div id="dataSpace" class="plots"></div>
+  <!-- <div id="dataSpaceWith4Lines" class="plots"></div> -->
+  <script>
+    // 训练数据
+    const trainData = {
+      sizeMB: [0.080, 9.00, 0.001, 0.100, 8.000, 5.000, 0.100, 6.000, 0.050, 0.500,
+               0.002, 2.000, 0.005, 10.00, 0.010, 7.000, 6.000, 5.000, 1.000, 1.000],
+      timeSec: [0.135, 0.739, 0.067, 0.126, 0.646, 0.435, 0.069, 0.497, 0.068, 0.116,
+                0.070, 0.289, 0.076, 0.0744, 0.083, 0.560, 0.480, 0.399, 0.153, 0.149]
+    };
+    // 测试数据
+    const testData = {
+      sizeMB: [5.000, 0.200, 0.001, 9.000, 0.002, 0.020, 0.008, 4.000, 0.001, 1.000],
+      timeSec: [0.425, 0.098, 0.052, 0.686, 0.066, 0.078, 0.070, 0.375, 0.058, 0.136]
+    };
+
+    const trainTensors = {
+      sizeMB: tf.tensor2d(trainData.sizeMB, [20, 1]),
+      timeSec: tf.tensor2d(trainData.timeSec, [20, 1])
+    };
+
+    const testTensors = {
+      sizeMB: tf.tensor2d(testData.sizeMB, [10, 1]),
+      timeSec: tf.tensor2d(testData.timeSec, [10, 1]),
+    }
+
+    // const trainXs = tf.tensor2d(trainData.sizeMB, [10, 1]);
+    // const trainYs = tf.tensor2d(trainData.timeSec, [10, 1]);
+    // const testXs = tf.tensor2d(testData.sizeMB, [10, 1]);
+    // const testYs = tf.tensor2d(testData.timeSec, [10, 1]);
+
+   // 绘制图型，为了看起来更直观
+    const dataTraceTrain = {
+      x: trainData.sizeMB,
+      y: trainData.timeSec,
+      name: 'trainData',
+      mode: 'markers',
+      type: 'scatter',
+      marker: {symbol: 'circle', size: 8}
+    };
+
+    const dataTraceTest = {
+      x: testData.sizeMB,
+      y: testData.timeSec,
+      name: 'testData',
+      mode: 'markers',
+      type: 'scatter',
+      marker: {symbol: 'circle', size: 8}
+    };
+
+    const dataTrace10Epochs = {
+      x:[0, 2],
+      y: [0, 0.01],
+      name: 'model after N epochs',
+      mode: 'lines',
+      line: {color: 'blue', width: 1, dash: 'dot'}
+    };
+    const dataTrace20Epochs = {
+      x:[0, 2],
+      y: [0, 0.01],
+      name: 'model after N epochs',
+      mode: 'lines',
+      line: {color: 'green', width: 2, dash: 'dash'}
+    };
+    const dataTrace100Epochs = {
+      x:[0, 2],
+      y: [0, 0.01],
+      name: 'model after N epochs',
+      mode: 'lines',
+      line: {color: 'red', width: 3, dash: 'longdash'}
+    };
+    const dataTrace200Epochs = {
+      x:[0, 2],
+      y: [0, 0.01],
+      name: 'model after N epochs',
+      mode: 'lines',
+      line: {color: 'black', width: 4, dash: 'solid'}
+    };
+
+    Plotly.newPlot('dataSpace', [dataTraceTrain, dataTraceTest], {
+      width: 700,
+      title: 'file download duration',
+      xaxis: {
+        title: 'size(MB)'
+      },
+      yaxis: {
+        title: 'time(sec)'
+      }
+    });
+
+    // 定义模型
+    const model = tf.sequential();
+    // 添加层
+    model.add(tf.layers.dense({
+      units: 1, // 一维张量
+      inputShape: [1],
+    }));
+
+    // 优化器--随机梯度算法
+    const optimizer = tf.train.sgd(0.0005);
+    // 模型编译 loss 越低代表拟合的越好
+    model.compile({optimizer: optimizer, loss: 'meanAbsoluteError'});
+
+    function updateScatterWithLines(dataTrace, k, b, N, traceIndex) {
+      dataTrace.x = [0, 10];
+      dataTrace.y = [b, b + (k * 10)];
+      var update = {
+        x: [dataTrace.x],
+        y: [dataTrace.y],
+        name: 'model after ' + N + ' epochs'
+      };
+      Plotly.restyle('dataSpace', update, [traceIndex]);
+    }
+
+    let k = 0;
+    let b = 0;
+    // 设置模型权重
+    model.setWeights([tf.tensor2d([k], [1, 1]), tf.tensor1d([b])]);
+
+    (async () => {
+      await model.fit(trainTensors.sizeMB, trainTensors.timeSec, {
+        epochs: 200, // 进行200次训练
+        callbacks: {
+          onEpochEnd: async (epoch, logs) => {
+            k = model.getWeights()[0].dataSync()[0];
+            b = model.getWeights()[1].dataSync()[0];
+
+            if (epoch === 9) {
+              updateScatterWithLines(dataTrace10Epochs, k, b, 10, 2);
+              console.log('wrote model 10');
+            }
+            if (epoch === 19) {
+              updateScatterWithLines(dataTrace20Epochs, k, b, 20, 3);
+              console.log('wrote model 20');
+            }
+            if (epoch === 99) {
+              updateScatterWithLines(dataTrace100Epochs, k, b, 100, 4);
+              console.log('wrote model 100');
+            }
+            if (epoch === 199) {
+              updateScatterWithLines(dataTrace200Epochs, k, b, 200, 5);
+              console.log('wrote model 200');
+            }
+            await tf.nextFrame();
+          }
+        }
+      });
+      const smallFileMB = 1;
+      const bigFileMB = 100;
+      const hugeFileMB = 10000;
+      model.predict(tf.tensor2d([[smallFileMB], [bigFileMB], [hugeFileMB]])).print();
+    })();
+    
+  </script>
+</body>
+</html>
